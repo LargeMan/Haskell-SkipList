@@ -136,11 +136,18 @@ test_case_15 = do
 
     check1 && check2
 
+
+assert_true [] = ""
+assert_true ((h,x):xs) = let status = if x then "Passed" else "Failed" in
+    "TestCase " ++ (show h) ++ ": " ++ status ++ "\n" ++ assert_true xs
+
+
+
 main = do
-    let s1 = referenceCheck (insert 5 1 (insert 15 1(insert 3 2 (insert 20 1 (skiplist 10 3))))) 1 [3, 5, 10, 15, 20]
+    let s1 = referenceCheck (insert 5 1 (insert 15 1(insert 3 2 (insert 20 1 (skiplist 10 3))))) 1 [3, 5, 15, 20]
         temp = insert 5 (-1) (insert 15 (-1) (insert 3 (-1) (insert 20 (-1) (skiplist 10 3))))
 
-        s2 = (referenceCheck temp 1 [3, 5, 10, 15, 20]) && ((size temp) == 5) && ((height $ start temp) == 3)
+        s2 = (referenceCheck temp 1 [3, 5, 15, 20]) && ((size temp) == 4) && ((height $ start temp) == 3)
 
 
         sizes = [2..1024]
@@ -153,6 +160,7 @@ main = do
 
         s4 = test_case_4 0 10
 
+        s5 = test_case_5
 
         case6 = test (insert 10 1 EmptySL) [2..10000] ((randoms $ mkStdGen (unsafePerformIO (randomIO))) :: [Int])
         lastone = last $ level_harvesting (start case6) 1
@@ -188,19 +196,14 @@ main = do
         s15 = test_case_15
 
 
+        cases = [s1,s2,s3,s4,s6,s7,s8,s9,s10,s11,s12,s13,s14,s15]
+        passed = foldr (&&) True cases
+
+    putStr $ assert_true (zip [1..15] cases)
+    if passed then
+        print $ "it works yay"
+    else do
+        print $ "WHEN THE CODE IS SUS XD XD XD XD"
         --kk = insert 30 5 (insert 25 4 (insert 25 1 (insert 20 2 (insert 15 3 (insert 10 2 (skiplist 0 5))))))
 
-
-    print $ s3
-    print $ s4
-    print $ s6
-    print $ s7
-    print $ s8
-    print $ s9
-    print $ s10
-    print $ s11
-    print $ s12
-    print $ s13
-    print $ s14
-    print $ s15
-    print $ case8
+ 
