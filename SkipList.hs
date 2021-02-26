@@ -16,6 +16,10 @@ data Node a = Node {
     bottom :: Node a
 } | None deriving (Show)
 
+-- might be useful later
+instance Eq (Node a) where
+    None == None = True
+    _ == _ = False
 
 --    The head Node will always be some arbitrary value,
 --   and will not affect ordering at all
@@ -47,8 +51,7 @@ harvests :: (Eq a, Ord a) => Node a -> Int -> [(Int, [a])]
 harvests None _ = []
 harvests n h
     | h == 0 = []
-    | otherwise = do
-        let x = map value (level_harvest n h)
+    | otherwise = let x = map value (level_harvest n h) in
         (h, x):(harvests n (h-1))
 
 -- gets all nodes at a certain height
@@ -103,20 +106,17 @@ insert val h skip@(SkipList{start = old_start, size = sz, gen = generator})
 -- checks if the skiplist is in need of a height expansion
 height_check :: Int -> Int -> SkipList a -> SkipList a
 height_check _ _ EmptySL = EmptySL
-height_check x y skip@(SkipList{..}) = do
-    let seed = unsafePerformIO (randomIO)
-        gens = (randoms $ mkStdGen seed) :: [Bool]
-    if x >= y then
-        SkipList {start, size, gen = gens}
-    else do
-        let new_head = expandTops start (True:gen)
-        SkipList {start = new_head, size, gen = gens}
+height_check x y (SkipList{..})
+    | x >= y =  SkipList {start, size, gen = gens}
+    | otherwise = SkipList {start = expandTops start (True:gen), size, gen = gens}
+        where seed = unsafePerformIO (randomIO)
+              gens = (randoms $ mkStdGen seed) :: [Bool]
 
 -- expands the top of the highest nodes, whilst disconnecting the previous height connection
 expandTops :: Node a -> [Bool] -> Node a
 expandTops None _ = None
-expandTops node@(Node{top = t, bottom = b, height = h, value = v}) (x:xs)
-    | x = do
+expandTops (Node{top = t, bottom = b, height = h, value = v}) (x:xs)
+    | x =
         Node { 
             top     = expandTops t (xs),
             bottom  = Node {top = disconnect_bottom t xs, bottom=b, value=v, height=h},
@@ -135,14 +135,10 @@ disconnect_bottom (Node{..}) (x:xs)
 -- gathers a list of nodes based on a provided criteria
 search_key :: (Eq a, Ord a) => (a -> a -> Bool) -> a -> Node a -> [Node a]
 search_key key val None = []
-search_key key val (Node{value = cur_val, ..}) = do
-    case top of
-        None -> search_key key val bottom
-        otherwise -> do
-            if (value top) `key` val then
-                [top] ++ search_key key val bottom
-            else
-                search_key key val top
+search_key key val (Node{top = None, ..}) = search_key key val bottom
+search_key key val (Node{value = cur_val, ..})
+    | (value top) `key` val = [top] ++ search_key key val bottom
+    | otherwise             = search_key key val top
 
 -- create a "single node" of height h
 create_chain :: Int -> a -> Node a
@@ -155,7 +151,7 @@ build_insert new_node [] = new_node
 build_insert new_node@(Node{height = h, ..}) (x:xs)
     | h > height x = Node {top, bottom = build_insert bottom (x:xs), height = h, value}
     | h < height x = build_insert new_node xs
-    | otherwise = Node {top = x, bottom = build_insert bottom xs, height = h, value}
+    | otherwise    = Node {top = x, bottom = build_insert bottom xs, height = h, value}
 
 -- reconnects the first partition and the modified end partition
 rebuild :: (Eq a, Ord a) => Int -> Node a -> a -> Node a -> Node a
@@ -214,16 +210,11 @@ delete val skip@(SkipList{..}) = do
 -- the first node in the skiplist is the last node in this list
 search_specific :: (Eq a, Ord a) => a -> Node a -> [Node a]
 search_specific val None = []
-search_specific val (Node{value = cur_val, ..}) = do
-    let none_next = case top of None -> True
-                                otherwise -> False
-    if none_next || (value top) > val then
-        search_specific val bottom
-    else
-        if (value top) == val then
-            (search_specific val top) ++ [top] ++ (search_specific val bottom)
-        else
-            search_specific val top
+search_specific val (Node{value = cur_val, ..})
+    | top == None || val_chk = search_specific val bottom
+    | (value top) == val     = (search_specific val top) ++ [top] ++ (search_specific val bottom)
+    | otherwise              = search_specific val top
+        where val_chk = (value top) > val
 
 -- gets just the node values in the list
 node_unzip :: (Eq a, Ord a) => [(Int, Node a)] -> [(Int, Node a)] -> [Node a]
@@ -241,7 +232,7 @@ first_part h (x:xs) val Node{top = None,..}
     | height < h = Node {top = x, bottom = first_part h (xs) val bottom, height, value}
     | otherwise = Node {top = None, bottom = first_part h (x:xs) val bottom, height, value}
 
-first_part h (x:xs) val (Node{top=t,value = cur_val, height, ..})
+first_part h (x:xs) val (Node{top=t,value = cur_val,..})
     | (value t) > val = Node {top=t, bottom = first_part h (x:xs) val bottom, height, value=cur_val}
     | (value t) < val = Node {top = first_part h (x:xs) val t, bottom, height, value=cur_val}
     | (value t) == val = do
@@ -263,9 +254,8 @@ get _ EmptySL = None
 get val (SkipList{..}) = if length x == 0 then None else last x where x = search_specific val start
 
 contains :: (Eq a, Ord a) => a -> SkipList a -> Bool
-contains val sl = case get val sl of
-                        None -> False
-                        otherwise -> True
+contains val sl = (get val sl) /= None
+
 
 skiplist :: (Eq a, Ord a) => a -> Int -> SkipList a
 --skiplist val h = insert val h EmptySL
