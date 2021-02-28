@@ -4,10 +4,7 @@
 module SkipList (insert, delete, get, contains, skiplist, Node(..), SkipList(..)) where
 
 import Data.List (intercalate) 
-import System.Random (randomIO, randoms, mkStdGen)
-import System.IO.Unsafe (unsafePerformIO)-- I am basically cheating random values for now
-
-
+import System.Random (randomIO, randoms, next, mkStdGen, StdGen)
 
 data Node a = Node {
     height :: Int,
@@ -28,8 +25,8 @@ instance Eq (Node a) where
 data SkipList a = SkipList {
     start :: Node a,
     size :: Int,
-    gen :: [Bool]
-} | EmptySL
+    gen :: StdGen
+}
 
 -- TODO: make a full visualization of a node tree
 --instance (Show a) => Show (Node a) where
@@ -39,7 +36,6 @@ data SkipList a = SkipList {
 
 -- prints a skiplist's height and a list of nodes of each level
 instance (Show a, Ord a, Eq a) => Show (SkipList a) where
-    show EmptySL = "EmptySL"
     show (SkipList{..}) = do
         let entirety = harvests start (height start)
             display = (map show entirety)
@@ -75,15 +71,6 @@ getMaxHeight n
 
 -- Will insert based on ordering. Duplicates always get put in front of existing values
 insert :: (Eq a, Ord a) => a -> Int -> SkipList a -> SkipList a
--- Unnecessary base case, unless one wants to immediately create a skiplist with 1 value
--- Note that in this case, the first inserted value will be of max height
-insert val h EmptySL = do
-    let seed = unsafePerformIO (randomIO)
-        x = (randoms $ mkStdGen seed) :: [Bool]
-        c1 = create_chain h val
-        c2 = create_chain h val
-    SkipList {start = Node {top = c1, bottom = bottom c2, height = h, value = val}, size = 1, gen = x}
-
 -- inserts by partitioning the part of the skiplist that is to go behind
 -- the node of the newly inserted value, connecting it to the new node,
 -- then reconnecting it to the front part
@@ -92,8 +79,10 @@ insert val h skip@(SkipList{start = old_start, size = sz, gen = generator})
     | otherwise = do
         let logH        = getMaxHeight (sz + 1)
             new_max     = max maxH logH
+            -- h_len       = length $ level_harvest old_start maxH
             new_skip    = height_check maxH logH skip
-            rand_h      = length $ takeWhile (== True) (True:(gen new_skip))
+            generated   = (randoms $ gen new_skip) :: [Bool]
+            rand_h      = length $ takeWhile (== True) (True:generated)
             new_h       = case h of (-1)      -> min new_max (max 1 rand_h) 
                                     otherwise -> h
             new_node    = create_chain new_h val
@@ -105,12 +94,11 @@ insert val h skip@(SkipList{start = old_start, size = sz, gen = generator})
 
 -- checks if the skiplist is in need of a height expansion
 height_check :: Int -> Int -> SkipList a -> SkipList a
-height_check _ _ EmptySL = EmptySL
 height_check x y (SkipList{..})
     | x >= y =  SkipList {start, size, gen = gens}
-    | otherwise = SkipList {start = expandTops start (True:gen), size, gen = gens}
-        where seed = unsafePerformIO (randomIO)
-              gens = (randoms $ mkStdGen seed) :: [Bool]
+    | otherwise = SkipList {start = expandTops start (True:generated), size, gen = gens}
+        where gens = (snd $ next gen)
+              generated = (randoms $ gen) :: [Bool]
 
 -- expands the top of the highest nodes, whilst disconnecting the previous height connection
 expandTops :: Node a -> [Bool] -> Node a
@@ -175,7 +163,6 @@ rebuild h new val (Node{value = cur_val, ..})
 
 
 delete :: (Eq a, Ord a) => a -> SkipList a -> SkipList a
-delete _ EmptySL = EmptySL
 delete _ skip@(SkipList{size=0,..}) = skip
 delete val skip@(SkipList{..}) = do
     -- search the skiplist first to 1). see if its there and 2). gather some duplicates
@@ -250,19 +237,19 @@ delete_til ((Node{..}):xs) = Node {top = delete_til xs, bottom, value, height}
 -- suite
 
 get :: (Eq a, Ord a) => a -> SkipList a -> Node a
-get _ EmptySL = None
 get val (SkipList{..}) = if length x == 0 then None else last x where x = search_specific val start
 
 contains :: (Eq a, Ord a) => a -> SkipList a -> Bool
 contains val sl = (get val sl) /= None
 
 
-skiplist :: (Eq a, Ord a) => a -> Int -> SkipList a
---skiplist val h = insert val h EmptySL
+skiplist :: (Eq a, Ord a) => a -> Int -> IO (SkipList a)
 skiplist val h
     | h < 1 = error "invalid height"
-    | otherwise = SkipList {
-        start = create_chain h val,
-        size = 0,
-        gen = [True]
-    }
+    | otherwise = do
+        seed <- randomIO
+        return $ SkipList {
+            start = create_chain h val,
+            size = 0,
+            gen = mkStdGen seed
+        }
