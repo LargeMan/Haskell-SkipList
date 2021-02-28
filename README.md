@@ -1,2 +1,3 @@
 # Haskell-SkipList
-Garbage, Impure implementation of SkipLists done soley as a bad joke
+Garbage, ~~Im~~pure implementation of SkipLists done soley as a bad joke
+Now with 100% more functional purity!
