@@ -156,21 +156,29 @@ test_case_15 = do
 
 
 main = do
+    seed <- randomIO
+    let nums = (randoms $ mkStdGen seed) :: [Int]
+
+    case1 <- skiplist 10 3
+    case8_head <- skiplist 10 1
+    case10_head <- skiplist 10 5
+    case12_head <- skiplist (head nums) 1
+
     let
         sizes = [1..1024]
-        seed = unsafePerformIO (randomIO) -- generate the random bool list; only gotta do this once per skip
+        --seed = unsafePerformIO (randomIO) -- generate the random bool list; only gotta do this once per skip
         nums = (randoms $ mkStdGen seed) :: [Int]   
         
-        case1 = unsafePerformIO (skiplist 10 3)
+        --case1 = unsafePerformIO (skiplist 10 3)
 
         case8_lst = take 5 ((randoms $ mkStdGen (unsafePerformIO (randomIO))) :: [Int])
-        case8 = test (unsafePerformIO (skiplist 10 1)) [1..5] case8_lst
+        case8 = test (case8_head) [1..5] case8_lst
         case8_1 = delete (last case8_lst) case8
 
-        case10_1 = (insert 10 (-1) (insert 1 (-1) (insert 2 (-1) (unsafePerformIO (skiplist 10 5)))))
+        case10_1 = (insert 10 (-1) (insert 1 (-1) (insert 2 (-1) (case10_head))))
         case10 = delete (if (head nums) > 0 then 2 else 10) case10_1
         case11 = delete 11 case10_1
-        case12 = insert 100000000 (-1) (unsafePerformIO (skiplist (head nums) 1))
+        case12 = insert 100000000 (-1) (case12_head)
         case13 = delete 10 (delete 1 (delete 2 case10_1))
 
 
@@ -194,13 +202,13 @@ main = do
         s15 = test_case_15
 
 
-
         cases = [s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13,s14,s15]
         passed = foldr (&&) True cases
-
 
     putStr $ assert_true (zip [1..15] cases)
     if passed then
         print $ "it works yay"
     else do
+        cringe <- readFile "CRINGE.txt"
+        putStr $ cringe ++ "\n"
         print $ "WHEN THE CODE IS SUS xd xd xd xd (cringe)"
