@@ -125,7 +125,7 @@ search_key :: (Eq a, Ord a) => (a -> a -> Bool) -> a -> Node a -> [Node a]
 search_key key val None = []
 search_key key val (Node{top = None, ..}) = search_key key val bottom
 search_key key val (Node{value = cur_val, ..})
-    | (value top) `key` val = [top] ++ search_key key val bottom
+    | (value top) `key` val = top : search_key key val bottom
     | otherwise             = search_key key val top
 
 -- create a "single node" of height h
@@ -168,21 +168,11 @@ delete val skip@(SkipList{..}) = do
     -- search the skiplist first to 1). see if its there and 2). gather some duplicates
     let src_nodes = search_specific val start
         check_len = length src_nodes
-    if check_len == 0 then skip
+    if check_len == 0 || size == 0 then skip
     else do
-        let h   = height (last src_nodes) -- this will allow us to target a specific dupe node
-            key = if check_len == 1 then (>) else (>=) -- makes life easier for dupe vs no dupe cases
-            f0  = (search_key key val start) ++ ((reverse.init) src_nodes) -- create end partition
-
-            -- this next part creates the end partition that follows the node to be deleted
-            f1      = [(height i, i) | i <- f0, height i <= h]
-            l       = if h == 1 then [1] else [h, h-1..1]
-            f2      = zip l (repeat None)
-            recon   = node_unzip f1 f2
-
-            -- deletes the intended node and reconnects the end partition
-            new_node = first_part h recon val start
-
+        let n = last src_nodes
+            after_n = get_ends n -- this will get us everything we need
+            new_node = first_part (height n) after_n val start
             -- time to do log height check
             logH = getMaxHeight (size - 1)
             maxH = height new_node
@@ -193,27 +183,25 @@ delete val skip@(SkipList{..}) = do
         else
             SkipList {start = new_node, size = size - 1, gen}
 
--- a modified search key meant to find duplicates
--- the first node in the skiplist is the last node in this list
+
+-- just get every successor node
+get_ends :: Node a -> [Node a]
+get_ends None = []
+get_ends (Node{..}) = top : get_ends bottom
+
+
 search_specific :: (Eq a, Ord a) => a -> Node a -> [Node a]
 search_specific val None = []
 search_specific val (Node{value = cur_val, ..})
     | top == None || val_chk = search_specific val bottom
-    | (value top) == val     = (search_specific val top) ++ [top] ++ (search_specific val bottom)
+    | (value top) == val     = (search_specific val top) ++ (top:(search_specific val bottom))
     | otherwise              = search_specific val top
         where val_chk = (value top) > val
-
--- gets just the node values in the list
-node_unzip :: (Eq a, Ord a) => [(Int, Node a)] -> [(Int, Node a)] -> [Node a]
-node_unzip [] ys = map snd ys
-node_unzip (x:xs) (y:ys)
-    | fst x == fst y = (snd x): node_unzip xs ys
-    | otherwise = None: node_unzip (x:xs) ys
 
 -- we must guarantee that the list is never empty
 -- this is horrific and i dont want to try explaining this
 first_part :: (Eq a, Ord a) => Int -> [Node a] -> a -> Node a -> Node a
-first_part _ _ val None = None
+first_part _ _ _ None = None
 
 first_part h (x:xs) val Node{top = None,..}
     | height < h = Node {top = x, bottom = first_part h (xs) val bottom, height, value}
@@ -223,10 +211,8 @@ first_part h (x:xs) val (Node{top=t,value = cur_val,..})
     | (value t) > val = Node {top=t, bottom = first_part h (x:xs) val bottom, height, value=cur_val}
     | (value t) < val = Node {top = first_part h (x:xs) val t, bottom, height, value=cur_val}
     | (value t) == val = do
-        let cringe = case x of None -> None
-                               otherwise -> if (value x) == val then top x else x
         if height == h then
-            Node {top = cringe, bottom = first_part h (xs) val bottom, height, value=cur_val}
+            Node {top = x, bottom = first_part h (xs) val bottom, height, value=cur_val}
         else
             Node {top=t, bottom = first_part h (x:xs) val bottom, height, value=cur_val}
 
